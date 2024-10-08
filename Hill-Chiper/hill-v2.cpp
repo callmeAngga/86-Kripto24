@@ -6,22 +6,15 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <iomanip>
 
 using namespace std;
 
 const int MAX_SIZE = 5;
 
-// Fungsi untuk menghitung gcd
-int gcd_func(int a, int b) {
-    if (b == 0)
-        return a;
-    return gcd_func(b, a % b);
-}
-
 // Fungsi untuk menghitung modulo invers
 int modInverse(int a, int m) {
     a = a % m;
-    if (a < 0) a += m;
     for (int x = 1; x < m; x++) {
         if ((a * x) % m == 1) {
             return x;
@@ -67,12 +60,13 @@ string hillCipher(const string& teks, int key[][MAX_SIZE], int n, const string& 
         kaliMatriks(key, blok, hasilBlok, n);
         
         for (int j = 0; j < n; j++) {
-            hasil += (hasilBlok[j] + 'A');
+            hasil += (hasilBlok[j] % 26 + 'A');
         }
     }
 
     return hasil;
 }
+
 
 string readText(const string& modeInput) {
     if (modeInput == "input") {
@@ -136,7 +130,7 @@ void getKey(int key[][MAX_SIZE], int n) {
 
 int hitungDeterminan(int matriks[][MAX_SIZE], int n) {
     if (n == 1) return matriks[0][0];
-    if (n == 2) return matriks[0][0] * matriks[1][1] - matriks[0][1] * matriks[1][0];
+    if (n == 2) return ((matriks[0][0] * matriks[1][1] - matriks[0][1] * matriks[1][0]) % 26 + 26) % 26;
 
     int det = 0;
     for (int j = 0; j < n; j++) {
@@ -149,134 +143,129 @@ int hitungDeterminan(int matriks[][MAX_SIZE], int n) {
                 subCol++;
             }
         }
-        det += (j % 2 == 0 ? 1 : -1) * matriks[0][j] * hitungDeterminan(subMatriks, n-1);
+        int subDet = hitungDeterminan(subMatriks, n-1);
+        det = (det + (j % 2 == 0 ? 1 : -1) * matriks[0][j] * subDet) % 26;
     }
-    return det;
+    return (det + 26) % 26;
 }
 
-// Fungsi untuk menemukan kunci dengan mencoba semua kombinasi pasangan blok
+void printMatrix(int matrix[][MAX_SIZE], int n, const string& name) {
+    cout << name << ":\n";
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            cout << setw(4) << matrix[i][j] << " ";
+        }
+        cout << "\n";
+    }
+    cout << "\n";
+}
+
 void findKey(const string& plainText, const string& cipherText, int n) {
-    if (n != 2) {
-        cout << "Implementasi ini hanya mendukung matriks 2x2 untuk pencarian kunci.\n";
+    if (n < 2 || n > MAX_SIZE) {
+        cout << "Ukuran matriks harus antara 2 dan " << MAX_SIZE << ".\n";
         return;
     }
 
-    vector<int> P, C;
-    for (char c : plainText) P.push_back(c - 'A');
-    for (char c : cipherText) C.push_back(c - 'A');
-
-    // Memastikan panjang plaintext dan ciphertext adalah kelipatan 2
-    while (P.size() % 2 != 0) P.push_back('X' - 'A');
-    while (C.size() % 2 != 0) C.push_back('X' - 'A');
-
-    // Membuat matriks P dan C
-    vector<vector<int>> matP, matC;
-    for (size_t i = 0; i < P.size(); i += 2) {
-        matP.push_back({P[i], P[i+1]});
-        matC.push_back({C[i], C[i+1]});
+    if (plainText.length() != cipherText.length()) {
+        cout << "Panjang plainteks dan cipherteks harus sama.\n";
+        return;
     }
 
-    bool keyFound = false;
+    if (plainText.length() < n * n) {
+        cout << "Panjang teks harus minimal " << n * n << " karakter untuk matriks " << n << "x" << n << ".\n";
+        return;
+    }
 
-    // Mencoba semua kombinasi pasangan blok
-    for (size_t i = 0; i < matP.size(); i++) {
-        for (size_t j = i + 1; j < matP.size(); j++) {
-            // Membentuk matP dari pasangan blok i dan j
-            int tempP[2][2] = {
-                {matP[i][0], matP[i][1]},
-                {matP[j][0], matP[j][1]}
-            };
+    vector<int> plaintextVec, ciphertextVec;
+    for (char c : plainText) plaintextVec.push_back(toupper(c) - 'A');
+    for (char c : cipherText) ciphertextVec.push_back(toupper(c) - 'A');
 
-            int detP = (tempP[0][0] * tempP[1][1] - tempP[0][1] * tempP[1][0]) % 26;
-            if (detP < 0) detP += 26;
+    int key[MAX_SIZE][MAX_SIZE] = {0};
+    int matriksP[MAX_SIZE][MAX_SIZE] = {0};
+    int matriksC[MAX_SIZE][MAX_SIZE] = {0};
 
-            // Cek apakah determinan invertibel
-            if (gcd_func(detP, 26) != 1) {
-                continue; // Tidak invertibel, coba pasangan berikutnya
-            }
-
-            int invDetP = modInverse(detP, 26);
-            if (invDetP == -1) {
-                continue; // Tidak ada invers, coba pasangan berikutnya
-            }
-
-            // Membentuk invers dari matP
-            int invP[2][2] = {
-                {(tempP[1][1] * invDetP) % 26, ((-tempP[0][1] + 26) * invDetP) % 26},
-                {((-tempP[1][0] + 26) * invDetP) % 26, (tempP[0][0] * invDetP) % 26}
-            };
-
-            // Membentuk matriks C dari pasangan blok yang sama
-            int tempC[2][2] = {
-                {matC[i][0], matC[i][1]},
-                {matC[j][0], matC[j][1]}
-            };
-
-            // Menghitung K = invP * C mod26
-            int key[2][2] = { {0, 0}, {0, 0} };
-            for (int x = 0; x < 2; x++) {
-                for (int y = 0; y < 2; y++) {
-                    for (int k = 0; k < 2; k++) {
-                        key[x][y] += invP[x][k] * tempC[k][y];
-                    }
-                    key[x][y] %= 26;
-                    if (key[x][y] < 0) key[x][y] += 26;
-                }
-            }
-
-            // Verifikasi kunci dengan seluruh blok
-            bool valid = true;
-            for (size_t k = 0; k < matP.size(); k++) {
-                // Enkripsi blok plaintext k dengan kunci yang ditemukan
-                int hasilEnkripsi[2];
-                hasilEnkripsi[0] = (key[0][0] * matP[k][0] + key[0][1] * matP[k][1]) % 26;
-                hasilEnkripsi[1] = (key[1][0] * matP[k][0] + key[1][1] * matP[k][1]) % 26;
-
-                if (hasilEnkripsi[0] != matC[k][0] || hasilEnkripsi[1] != matC[k][1]) {
-                    valid = false;
-                    break;
-                }
-            }
-
-            if (valid) {
-                // Kunci ditemukan
-                cout << "Kunci yang ditemukan:\n";
-                for (int x = 0; x < 2; x++) {
-                    for (int y = 0; y < 2; y++) {
-                        cout << key[x][y] << " ";
-                    }
-                    cout << "\n";
-                }
-
-                // Verifikasi kunci
-                int verifyKey[MAX_SIZE][MAX_SIZE];
-                for (int x = 0; x < 2; x++) {
-                    for (int y = 0; y < 2; y++) {
-                        verifyKey[x][y] = key[x][y];
-                    }
-                }
-                string hasilEnkripsiStr = hillCipher(plainText, verifyKey, 2, "encrypt");
-                string cipherTextFiltered = "";
-                for (char c : cipherText) {
-                    if (isalpha(c)) {
-                        cipherTextFiltered += toupper(c);
-                    }
-                }
-
-                if (hasilEnkripsiStr == cipherTextFiltered) {
-                    cout << "Kunci berhasil diverifikasi.\n";
-                } else {
-                    cout << "Kunci tidak dapat diverifikasi. Mungkin ada lebih dari satu kunci yang valid.\n";
-                }
-
-                keyFound = true;
-                return; // Kunci ditemukan, keluar dari fungsi
-            }
+    // Membangun matriks P dan C menggunakan n*n karakter pertama
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            int index = i * n + j;
+            matriksP[i][j] = plaintextVec[index];
+            matriksC[i][j] = ciphertextVec[index];
         }
     }
 
-    if (!keyFound) {
-        cout << "Tidak dapat menemukan kunci dengan pasangan blok yang diberikan.\n";
+    cout << "Proses pencarian kunci:\n\n";
+    printMatrix(matriksP, n, "Matriks Plainteks (P)");
+    printMatrix(matriksC, n, "Matriks Cipherteks (C)");
+
+    // Menghitung determinan P
+    int detP = hitungDeterminan(matriksP, n);
+    cout << "Determinan matriks P: " << detP << "\n\n";
+
+    if (detP == 0) {
+        cout << "Determinan matriks P adalah 0. Tidak dapat menemukan kunci.\n";
+        return;
+    }
+
+    int invDetP = modInverse(detP, 26);
+
+    if (invDetP == -1) {
+        cout << "Matriks plaintext tidak memiliki invers. Tidak dapat menemukan kunci.\n";
+        return;
+    }
+
+    cout << "Invers determinan P mod 26: " << invDetP << "\n\n";
+
+    // Menghitung adjoin matriks P
+    int adjP[MAX_SIZE][MAX_SIZE] = {0};
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            int subMatriks[MAX_SIZE][MAX_SIZE];
+            int subIndex = 0;
+            for (int r = 0; r < n; r++) {
+                for (int c = 0; c < n; c++) {
+                    if (r != i && c != j) {
+                        subMatriks[subIndex / (n-1)][subIndex % (n-1)] = matriksP[r][c];
+                        subIndex++;
+                    }
+                }
+            }
+            int cofactor = hitungDeterminan(subMatriks, n-1);
+            if ((i + j) % 2 == 1) cofactor = -cofactor;
+            adjP[j][i] = ((cofactor % 26) + 26) % 26;
+        }
+    }
+
+    printMatrix(adjP, n, "Matriks Adjoin P");
+
+    // Menghitung invers matriks P
+    int invP[MAX_SIZE][MAX_SIZE] = {0};
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            invP[i][j] = (adjP[i][j] * invDetP) % 26;
+        }
+    }
+
+    printMatrix(invP, n, "Matriks Invers P");
+
+    // Menghitung matriks kunci
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            int sum = 0;
+            for (int k = 0; k < n; k++) {
+                sum = (sum + matriksC[i][k] * invP[k][j]) % 26;
+            }
+            key[i][j] = (sum + 26) % 26;
+        }
+    }
+
+    printMatrix(key, n, "Matriks Kunci yang ditemukan");
+
+    // Verifikasi kunci
+    string hasilEnkripsi = hillCipher(plainText.substr(0, n*n), key, n, "encrypt");
+    if (hasilEnkripsi == cipherText.substr(0, n*n)) {
+        cout << "Kunci berhasil diverifikasi.\n";
+    } else {
+        cout << "Kunci tidak dapat diverifikasi. Mungkin ada lebih dari satu kunci yang valid.\n";
     }
 }
 
@@ -338,16 +327,6 @@ void menu() {
             int key[MAX_SIZE][MAX_SIZE];
             getKey(key, n);
 
-            // Cek apakah matriks kunci memiliki invers modulo 26 (hanya untuk enkripsi)
-            if (pilihan == 1) {
-                int detK = hitungDeterminan(key, n) % 26;
-                if (detK < 0) detK += 26;
-                if (gcd_func(detK, 26) != 1) {
-                    cout << "Matriks kunci tidak memiliki invers modulo 26. Silakan masukkan kunci lain.\n";
-                    continue;
-                }
-            }
-
             string hasilTeks = hillCipher(teks, key, n, operasi);
 
             if (pilihan == 1) {
@@ -368,8 +347,7 @@ void menu() {
             cout << "Masukkan ukuran matriks kunci (2-5): ";
             int n;
             cin >> n;
-            cin.ignore(); // Menambahkan ini untuk membersihkan newline setelah input integer
-
+            
             findKey(plainText, cipherText, n);
         } else if (pilihan == 4) {
             cout << "Terima kasih telah menggunakan Hill Cipher!\n";
